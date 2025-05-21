@@ -34,7 +34,7 @@ jobs:
       id: project_number
       uses: google-github-actions/get-gcp-project-number@v1 # Necesita el ID del proyecto
       with:
-        project_id: ${{ env.GCP_PROJECT_ID }}
+        project_id: "capacitacion-mlops"
 
     - name: Authenticate to Google Cloud
       id: auth
