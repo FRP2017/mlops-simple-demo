@@ -1,0 +1,9 @@
+# .gitignore
+venv_iris/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.so
+.DS_Store
+*.joblib
+compiled_iris_pipeline.json
