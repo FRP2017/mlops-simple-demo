@@ -2,19 +2,16 @@ name: MLOps Iris Demo CI/CD
 
 on:
   push:
-    branches: [ "main"] # Ajusta a tu rama principal
+    branches: [ "main" ] # Ajusta a tu rama principal
   # pull_request: # Descomenta si quieres que corra en PRs también
   #   branches: [ "main", "master" ]
 
 env:
-  # Usamos el ID del proyecto directamente aquí.
-  # Si usas un secreto, asegúrate de que esté configurado en GitHub.
-  GCP_PROJECT_ID: "mlops-second" # Tu ID de proyecto de GCP
-  GCP_REGION: "us-central1" # O la región que configuraste
-  GCP_AR_REPO_NAME: "ml-models-repo" # El nombre de tu repo en Artifact Registry
-  DOCKER_IMAGE_NAME: "iris-classifier-app" # El nombre de tu imagen Docker
-  # Ajusta el nombre del bucket directamente
-  GCS_BUCKET_NAME_NO_GS: "mlops-second-iris-bucket" # Nombre de tu bucket (sin gs://)
+  GCP_PROJECT_ID: "mlops-second"
+  GCP_REGION: "us-central1"
+  GCP_AR_REPO_NAME: "ml-models-repo"
+  DOCKER_IMAGE_NAME: "iris-classifier-app"
+  GCS_BUCKET_NAME_NO_GS: "mlops-second-iris-bucket"
 
 jobs:
   setup-build-push-docker:
@@ -25,16 +22,13 @@ jobs:
       id-token: 'write' # Necesario para Workload Identity Federation
 
     outputs:
-      docker_image_uri: ${{ steps.push_docker_image.outputs.image_uri }}
+      # docker_image_uri: ${{ steps.push_docker_image.outputs.image_uri_sha }} # Cambiado para usar image_uri_sha
       docker_image_uri_latest: ${{ steps.push_docker_image.outputs.image_uri_latest }}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # ¡IMPORTANTE! El orden de estos pasos es crucial para la autenticación.
-    # 'Set up Cloud SDK' debe ir antes de 'Authenticate to Google Cloud'.
-    # La autenticación ahora usa el secreto GCP_PROJECT_NUMBER.
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
 
@@ -42,14 +36,8 @@ jobs:
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        # Aquí usamos el SECRETO que contiene el NÚMERO DE PROYECTO.
-        # Asegúrate de haberlo configurado en GitHub Secrets con el VALOR NUMÉRICO.
         workload_identity_provider: "projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-        service_account: ${{ secrets.GCP_SA_EMAIL }}
-
-    # El paso 'Get GCP Project Number (Alternative)' ha sido eliminado de aquí,
-    # ya que el número de proyecto se obtiene directamente del secreto para la autenticación.
-    # Los comandos posteriores pueden usar ${{ secrets.GCP_PROJECT_NUMBER }} si necesitan el número.
+        service_account: ${{ secrets.GCP_SA_EMAIL }} # SA que usa GitHub Actions para autenticarse
 
     - name: Configure Docker for Artifact Registry
       run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
@@ -69,69 +57,62 @@ jobs:
         docker push "${{ steps.build_docker_image.outputs.image_uri_sha }}"
         docker push "${{ steps.build_docker_image.outputs.image_uri_latest }}"
         echo "Pushed images: ${{ steps.build_docker_image.outputs.image_uri_sha }} and ${{ steps.build_docker_image.outputs.image_uri_latest }}"
-        echo "image_uri=${{ steps.build_docker_image.outputs.image_uri_sha }}" >> $GITHUB_OUTPUT # Para compatibilidad con el siguiente job si usa una específica
-        echo "image_uri_latest=${{ steps.build_docker_image.outputs.image_uri_latest }}" >> $GITHUB_OUTPUT
+        # El output 'docker_image_uri_latest' es el que usaremos en el siguiente job
+        # echo "image_uri_sha=${{ steps.build_docker_image.outputs.image_uri_sha }}" >> $GITHUB_OUTPUT # Ya se define arriba
+        # echo "image_uri_latest=${{ steps.build_docker_image.outputs.image_uri_latest }}" >> $GITHUB_OUTPUT # Ya se define arriba
 
-
-  compile-and-run-pipeline:
-    name: Compile and Run Vertex AI Pipeline
+  compile-and-submit-pipeline-via-sdk: # Nombre del job actualizado
+    name: Compile and Submit Vertex AI Pipeline via Python SDK # Nombre del job actualizado
     runs-on: ubuntu-latest
-    needs: setup-build-push-docker # Depende del job anterior
+    needs: setup-build-push-docker
 
     permissions:
       contents: 'read'
-      id-token: 'write'
+      id-token: 'write' # Necesario para Workload Identity Federation
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # Mismo orden de autenticación para el segundo job
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
+      # No es estrictamente necesario si el SDK de Python usa las credenciales de 'auth',
+      # pero no causa problemas y puede ser útil para otros comandos gcloud si los añades.
 
     - name: Authenticate to Google Cloud
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        # Aquí usamos el SECRETO que contiene el NÚMERO DE PROYECTO.
         workload_identity_provider: "projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-        service_account: ${{ secrets.GCP_SA_EMAIL }}
-
-    # El paso 'Get GCP Project Number' original ha sido eliminado de aquí también.
+        service_account: ${{ secrets.GCP_SA_EMAIL }} # SA que usa GitHub Actions para autenticarse y tiene permisos para *enviar* jobs a Vertex AI.
 
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.10' # O la versión que estés usando
 
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r requirements.txt # Asegúrate que kfp y google-cloud-aiplatform estén aquí
 
-    - name: Compile pipeline
-      id: compile_pipeline
+    - name: Compile and Submit Pipeline via Python Script
       run: |
-        # Usar la imagen con tag 'latest' para el pipeline, asumiendo que es la más actualizada
+        echo "Starting Python script to compile and submit pipeline..."
+        # Exporta las variables de entorno que el script training_pipeline.py espera
         export PIPELINE_DOCKER_IMAGE="${{ needs.setup-build-push-docker.outputs.docker_image_uri_latest }}"
-        export PROJECT_ID="${{ env.GCP_PROJECT_ID }}"
-        export REGION="${{ env.GCP_REGION }}"
-        export BUCKET_NAME="${{ env.GCS_BUCKET_NAME_NO_GS }}"
+        export GCP_PROJECT_ID="${{ env.GCP_PROJECT_ID }}"
+        export GCP_REGION="${{ env.GCP_REGION }}"
+        export GCS_BUCKET_NAME_NO_GS="${{ env.GCS_BUCKET_NAME_NO_GS }}"
+        
+        # Esta es la cuenta de servicio que los *componentes del pipeline* usarán en Vertex AI.
+        # Puede ser la misma que secrets.GCP_SA_EMAIL si esa tiene todos los permisos necesarios,
+        # o una diferente más específica para las operaciones del pipeline.
+        # Asegúrate de que este secreto exista en GitHub si es diferente.
+        export GCP_SA_EMAIL_FOR_PIPELINE="${{ secrets.GCP_SA_EMAIL_FOR_PIPELINE }}" # O usa ${{ secrets.GCP_SA_EMAIL }} si es la misma
 
-        python pipelines/training_pipeline.py
-        echo "COMPILED_PIPELINE_PATH=compiled_iris_pipeline.json" >> $GITHUB_ENV
-        # Opcional: Subir el JSON compilado a GCS para referencia
-        # gsutil cp compiled_iris_pipeline.json gs://${{ env.GCS_BUCKET_NAME_NO_GS }}/pipelines/compiled/compiled_iris_pipeline_${{ github.sha }}.json
+        # GITHUB_RUN_ID y GITHUB_SHA son variables de entorno que GitHub Actions provee automáticamente
+        # y tu script de Python las leerá con os.getenv("GITHUB_RUN_ID") y os.getenv("GITHUB_SHA").
 
-    - name: Submit Vertex AI Pipeline Job
-      run: |
-        gcloud vertex ai pipelines run \
-          --project="${{ env.GCP_PROJECT_ID }}" \
-          --region="${{ env.GCP_REGION }}" \
-          --file="${{ env.COMPILED_PIPELINE_PATH }}" \
-          --display-name="iris-pipeline-run-gh-${{ github.run_id }}-${{ github.sha }}" \
-          --pipeline-root="gs://${{ env.GCS_BUCKET_NAME_NO_GS }}/pipelines/runs" \
-          --service-account="${{ secrets.GCP_SA_EMAIL }}" \
-          --parameter-values="raw_data_gcs_uri=gs://${{ env.GCS_BUCKET_NAME_NO_GS }}/data/iris_raw.csv"
-        # ... resto del comando
+        python pipelines/training_pipeline.py # Este script ahora compila Y envía el pipeline.
+      # Ya no se necesita el paso de "gcloud vertex ai pipelines run"
