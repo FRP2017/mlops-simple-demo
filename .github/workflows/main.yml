@@ -126,15 +126,11 @@ jobs:
 
     - name: Submit Vertex AI Pipeline Job
       run: |
-        # CAMBIA esta línea:
-        # gcloud ai pipeline-jobs submit \
-        # A esta línea:
-        gcloud ai pipelines jobs submit \
+        gcloud ai pipeline-jobs submit \
           --project="${{ env.GCP_PROJECT_ID }}" \
           --region="${{ env.GCP_REGION }}" \
-          --pipeline-file="${{ env.COMPILED_PIPELINE_PATH }}" \
+          --pipeline-path="${{ env.COMPILED_PIPELINE_PATH }}" \
           --display-name="iris-pipeline-run-gh-${{ github.run_id }}-${{ github.sha }}" \
           --pipeline-root="gs://${{ env.GCS_BUCKET_NAME_NO_GS }}/pipelines/runs" \
           --service-account="${{ secrets.GCP_SA_EMAIL }}" \
           --parameter-values="raw_data_gcs_uri=gs://${{ env.GCS_BUCKET_NAME_NO_GS }}/data/iris_raw.csv"
-        # ... resto del comando
