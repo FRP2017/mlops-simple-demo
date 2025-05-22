@@ -126,10 +126,10 @@ jobs:
 
     - name: Submit Vertex AI Pipeline Job
       run: |
-        gcloud ai-platform pipelines submit \
+        gcloud vertex ai pipelines run \
           --project="${{ env.GCP_PROJECT_ID }}" \
           --region="${{ env.GCP_REGION }}" \
-          --pipeline-file="${{ env.COMPILED_PIPELINE_PATH }}" \
+          --file="${{ env.COMPILED_PIPELINE_PATH }}" \
           --display-name="iris-pipeline-run-gh-${{ github.run_id }}-${{ github.sha }}" \
           --pipeline-root="gs://${{ env.GCS_BUCKET_NAME_NO_GS }}/pipelines/runs" \
           --service-account="${{ secrets.GCP_SA_EMAIL }}" \
