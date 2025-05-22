@@ -33,10 +33,26 @@ jobs:
       uses: actions/checkout@v4
 
     #- name: Get GCP Project Number
-     # id: project_number
-      #uses: google-github-actions/get-gcp-project-number@v1
-      #with:
-       # project_id: ${{ env.GCP_PROJECT_ID }} # Usa la variable de entorno, que ahora tiene el valor literal
+    #  id: project_number
+    #  uses: google-github-actions/get-gcp-project-number@v1
+    #  with:
+    #    project_id: ${{ env.GCP_PROJECT_ID }} # Usa la variable de entorno, que ahora tiene el valor literal
+
+    - name: Get GCP Project Number (Alternative)
+      id: project_number
+      run: |
+        # Configura el proyecto para la sesión de gcloud
+        gcloud config set project ${{ env.GCP_PROJECT_ID }}
+
+        # Obtiene el número del proyecto usando gcloud y jq para parsear la salida
+        PROJECT_NUMBER=$(gcloud projects describe "${{ env.GCP_PROJECT_ID }}" --format="json" | jq -r .projectNumber)
+
+        # Exporta el número del proyecto como una salida del paso
+        echo "project_number=$PROJECT_NUMBER" >> $GITHUB_OUTPUT
+      env:
+        # Asegúrate de que jq esté disponible en el runner
+        # ubuntu-latest ya lo incluye por defecto.
+        ACTIONS_ALLOW_UNFILTERED_COMMANDS: 'true' # Necesario para $GITHUB_OUTPUT en algunas versiones de runner
 
     - name: Authenticate to Google Cloud
       id: auth
