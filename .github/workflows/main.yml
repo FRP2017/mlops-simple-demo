@@ -32,11 +32,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Get GCP Project Number
-      id: project_number
-      uses: google-github-actions/get-gcp-project-number@v1
-      with:
-        project_id: ${{ env.GCP_PROJECT_ID }} # Usa la variable de entorno, que ahora tiene el valor literal
+    #- name: Get GCP Project Number
+     # id: project_number
+      #uses: google-github-actions/get-gcp-project-number@v1
+      #with:
+       # project_id: ${{ env.GCP_PROJECT_ID }} # Usa la variable de entorno, que ahora tiene el valor literal
 
     - name: Authenticate to Google Cloud
       id: auth
