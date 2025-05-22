@@ -7,7 +7,7 @@ on:
   #   branches: [ "main", "master" ]
 
 env:
-  # Usamos el ID del proyecto directamente aquí, pero también puedes usar un secreto.
+  # Usamos el ID del proyecto directamente aquí.
   # Si usas un secreto, asegúrate de que esté configurado en GitHub.
   GCP_PROJECT_ID: "mlops-second" # Tu ID de proyecto de GCP
   GCP_REGION: "us-central1" # O la región que configuraste
@@ -32,37 +32,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    #- name: Get GCP Project Number
-    #  id: project_number
-    #  uses: google-github-actions/get-gcp-project-number@v1
-    #  with:
-    #    project_id: ${{ env.GCP_PROJECT_ID }} # Usa la variable de entorno, que ahora tiene el valor literal
-
-    - name: Get GCP Project Number (Alternative)
-      id: project_number
-      run: |
-        # Configura el proyecto para la sesión de gcloud
-        gcloud config set project ${{ env.GCP_PROJECT_ID }}
-
-        # Obtiene el número del proyecto usando gcloud y jq para parsear la salida
-        PROJECT_NUMBER=$(gcloud projects describe "${{ env.GCP_PROJECT_ID }}" --format="json" | jq -r .projectNumber)
-
-        # Exporta el número del proyecto como una salida del paso
-        echo "project_number=$PROJECT_NUMBER" >> $GITHUB_OUTPUT
-      env:
-        # Asegúrate de que jq esté disponible en el runner
-        # ubuntu-latest ya lo incluye por defecto.
-        ACTIONS_ALLOW_UNFILTERED_COMMANDS: 'true' # Necesario para $GITHUB_OUTPUT en algunas versiones de runner
+    # ¡IMPORTANTE! El orden de estos pasos es crucial para la autenticación.
+    # 'Set up Cloud SDK' debe ir antes de 'Authenticate to Google Cloud'.
+    # La autenticación ahora usa el secreto GCP_PROJECT_NUMBER.
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
     - name: Authenticate to Google Cloud
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: "projects/${{ steps.project_number.outputs.project_number }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider" # Asegúrate que 'github-pool' y 'github-provider' coincidan con tu config WIF
-        service_account: ${{ secrets.GCP_SA_EMAIL }} # Configura este secreto en GitHub (ej. mlops-iris-runner@tu-proyecto.iam.gserviceaccount.com)
+        # Aquí usamos el SECRETO que contiene el NÚMERO DE PROYECTO.
+        # Asegúrate de haberlo configurado en GitHub Secrets con el VALOR NUMÉRICO.
+        workload_identity_provider: "projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+        service_account: ${{ secrets.GCP_SA_EMAIL }}
 
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+    # El paso 'Get GCP Project Number (Alternative)' ha sido eliminado de aquí,
+    # ya que el número de proyecto se obtiene directamente del secreto para la autenticación.
+    # Los comandos posteriores pueden usar ${{ secrets.GCP_PROJECT_NUMBER }} si necesitan el número.
 
     - name: Configure Docker for Artifact Registry
       run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
@@ -99,21 +86,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Get GCP Project Number
-      id: project_number
-      uses: google-github-actions/get-gcp-project-number@v1
-      with:
-        project_id: ${{ env.GCP_PROJECT_ID }}
+    # Mismo orden de autenticación para el segundo job
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
     - name: Authenticate to Google Cloud
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        workload_identity_provider: "projects/${{ steps.project_number.outputs.project_number }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+        # Aquí usamos el SECRETO que contiene el NÚMERO DE PROYECTO.
+        workload_identity_provider: "projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
         service_account: ${{ secrets.GCP_SA_EMAIL }}
 
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+    # El paso 'Get GCP Project Number' original ha sido eliminado de aquí también.
 
     - name: Set up Python
       uses: actions/setup-python@v5
