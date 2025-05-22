@@ -126,7 +126,10 @@ jobs:
 
     - name: Submit Vertex AI Pipeline Job
       run: |
-        gcloud ai pipeline-jobs submit \
+        # CAMBIA esta línea:
+        # gcloud ai pipeline-jobs submit \
+        # A esta línea:
+        gcloud ai pipelines jobs submit \
           --project="${{ env.GCP_PROJECT_ID }}" \
           --region="${{ env.GCP_REGION }}" \
           --pipeline-file="${{ env.COMPILED_PIPELINE_PATH }}" \
@@ -134,6 +137,4 @@ jobs:
           --pipeline-root="gs://${{ env.GCS_BUCKET_NAME_NO_GS }}/pipelines/runs" \
           --service-account="${{ secrets.GCP_SA_EMAIL }}" \
           --parameter-values="raw_data_gcs_uri=gs://${{ env.GCS_BUCKET_NAME_NO_GS }}/data/iris_raw.csv"
-        # Aquí los parámetros del pipeline pueden ser sobreescritos si es necesario
-        # Asegúrate que PIPELINE_DOCKER_IMAGE dentro de training_pipeline.py usa la variable de entorno
-        # que se le pasa en el paso de compilación.
+        # ... resto del comando
